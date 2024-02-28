@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Configuration;
-using System.Data.Odbc;
-using System.Linq;
+using System.Security.Principal;
 using System.Web;
 using System.Web.Security;
 
@@ -15,189 +13,69 @@ namespace FormAuthenticationHelper
 
         public void Init(HttpApplication context)
         {
+            if (!IsModuleLoaded(typeof(System.Web.Security.FormsAuthenticationModule)))
+            {
+                DbgWrite("Form Auth Module missing");
+                throw new MissingMethodException();
+            }
             context.AuthenticateRequest += new EventHandler(Login);
             context.AuthorizeRequest += new EventHandler(Authorize);
         }
 
+
         public void Authorize(Object source, EventArgs e)
         {
             HttpApplication app = (HttpApplication)source;
-            HttpRequest request = app.Context.Request;
-            HttpResponse response = app.Context.Response;
+            HttpContext context = app.Context;
+            HttpRequest request = context.Request;
+            HttpResponse response = context.Response;
 
-            if (!IsModuleLoaded(typeof(System.Web.Security.FormsAuthenticationModule)))
-            {
-                DbgWrite("Form Auth Module missing");
-                return;
-            }
-
+            // Only check authoriation on urls which arent our loginurl
             if (!request.Url.AbsolutePath.ToLower().EndsWith(FormsAuthentication.LoginUrl.ToLower()))
-                if (!request.IsAuthenticated)
+            {
+                // Retrieve the current user's principal
+                IPrincipal user = context.User;
+
+                // If user is null then make it anonymous... I am surprised this isnt done on its own
+                if (user == null || !user.Identity.IsAuthenticated)
                 {
-                    // Redirect to login page if the user is not authenticated
-                    FormsAuthentication.RedirectToLoginPage();
+                    user = new GenericPrincipal(new GenericIdentity(""), null);
                 }
 
-            if (!ValidateUserGroup(request.Form.Get("username")))
-            {
-                DbgWrite("denied usergroup " + request.Form.Get("username"));
-                response.StatusCode = 401;
+                // Check URL access for the current user's principal
+                if (!UrlAuthorizationModule.CheckUrlAccessForPrincipal(request.Url.AbsolutePath, user, request.HttpMethod))
+                {
+                    DbgWrite($"Access denied for user:[{user.Identity.Name}] at path:[{request.Path}]");
+                    FormsAuthentication.RedirectToLoginPage();
+                }
+                else
+                {
+                    DbgWrite($"Allowed user:[{user.Identity.Name}] at path:[{request.Path}]");
+                }
             }
         }
 
         public void Login(Object source, EventArgs e)
         {
             HttpApplication app = (HttpApplication)source;
+            HttpContext context = app.Context;
             HttpRequest request = app.Context.Request;
-            HttpResponse response = app.Context.Response;
-
-            if (!IsModuleLoaded(typeof(System.Web.Security.FormsAuthenticationModule)))
-            {
-                DbgWrite("Form Auth Module missing");
-                return;
-            }
-
+            
             // we should only respond to post requests at our loginurl
             if (request.HttpMethod != "POST" && request.Url.AbsolutePath.ToLower() != FormsAuthentication.LoginUrl.ToLower())
             {
+                DbgWrite("Login(): Not at path and request method is not post, return");
                 return;
             }
-
-            if(ValidateUserCredentials(request.Form.Get("username"), request.Form.Get("password")))
+            DbgWrite("Validating user");
+            if(Membership.ValidateUser(request.Form.Get("username"), request.Form.Get("password")))
             {
-                DbgWrite("validated user " + request.Form.Get("username"));
                 FormsAuthentication.RedirectFromLoginPage(request.Form.Get("username"), false);
+                DbgWrite($"validated user:[{request.Form.Get("username")}]");
             }
-        }
-
-
-        /// <summary>
-        /// Validate a users credentials
-        /// </summary>
-        /// <param name="userName"></param>
-        /// <param name="passWord"></param>
-        /// <returns></returns>
-        private bool ValidateUserGroup(string userName)
-        {
-            string ODBC;
-            ODBC = TryGetConnectionString();
-
-            string UserGroups = ConfigurationManager.AppSettings["Allowed_Groups"] ?? "";
-            string[] UserGroupsArray = UserGroups.Split(',');
-
-            if (string.IsNullOrEmpty(ODBC))
+            else
             {
-                return true;
-            }
-
-            try
-            {
-                using (OdbcConnection conn = new OdbcConnection(ODBC))
-                {
-                    conn.Open();
-                    using (OdbcCommand cmd = new OdbcCommand("Select `group` from users where `user` = ?", conn))
-                    {
-                        cmd.Parameters.Add("@user", OdbcType.VarChar).Value = userName;
-
-                        var group = cmd.ExecuteScalar();
-                        // is user a part of the groups allowed for the path?
-                        // if user has no group listed, assume they have global permission
-                        // conversely, if no group is listed for the path, assume anyone logged in is permitted to access
-                        if ((UserGroupsArray.Contains(group) || string.IsNullOrEmpty(UserGroups)))
-                        {
-                            return true;
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                // Add error handling here for debugging.
-                // This error message should not be sent back to the caller.
-                DbgWrite("Exception " + ex.Message);
-            }
-            return false;
-        }
-
-        /// <summary>
-        /// Validate a users credentials
-        /// </summary>
-        /// <param name="userName"></param>
-        /// <param name="passWord"></param>
-        /// <returns></returns>
-        private bool ValidateUserCredentials(string userName, string password)
-        {
-            string passwordLookup = null;
-
-            string ODBC;
-            try
-            {
-                ODBC = ConfigurationManager.ConnectionStrings["FormAuthentication"].ConnectionString;
-            }
-            catch
-            {
-                ODBC = "";
-            }
-
-            string UserGroups = ConfigurationManager.AppSettings["Allowed_Groups"] ?? "";
-            string[] UserGroupsArray = UserGroups.Split(',');
-
-            if (string.IsNullOrEmpty(ODBC))
-            {
-                return true;
-            }
-
-            if (string.IsNullOrEmpty(userName) || userName.Length > 100)
-            {
-                DbgWrite("Input validation of userName failed.");
-                return false;
-            }
-
-            if (string.IsNullOrEmpty(password) || password.Length > 128)
-            {
-                DbgWrite("Input validation of password failed.");
-                return false;
-            }
-
-            try
-            {
-                using (OdbcConnection conn = new OdbcConnection(ODBC))
-                {
-                    conn.Open();
-                    using (OdbcCommand cmd = new OdbcCommand("Select `password` from users where `user` = ?", conn))
-                    {
-                        cmd.Parameters.Add("@user", OdbcType.VarChar).Value = userName;
-
-                        passwordLookup = cmd.ExecuteScalar().ToString();
-                        
-                        // is user a part of the groups allowed for the path?
-                        // if user has no group listed, assume they have global permission
-                        // conversely, if no group is listed for the path, assume anyone logged in is permitted to access
-                        if (BCrypt.Net.BCrypt.Verify(password, passwordLookup))
-                        {
-                            return true;
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                // Add error handling here for debugging.
-                // This error message should not be sent back to the caller.
-                DbgWrite("Exception " + ex.Message);
-            }
-            return false;
-        }
-
-        public string TryGetConnectionString()
-        {
-            try
-            {
-                return ConfigurationManager.ConnectionStrings["FormAuthentication"].ConnectionString;
-            }
-            catch
-            {
-                return "";
+                DbgWrite($"Membership.ValidateUser() failure user:[{request.Form.Get("username")}]");
             }
         }
 
