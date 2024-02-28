@@ -1,12 +1,9 @@
 ﻿using System;
 using System.Configuration;
 using System.Data.Odbc;
-using System.Diagnostics;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Web;
 using System.Web.Security;
-using Microsoft.Web.Administration;
 
 
 namespace FormAuthenticationHelper
@@ -41,9 +38,9 @@ namespace FormAuthenticationHelper
                     FormsAuthentication.RedirectToLoginPage();
                 }
 
-            if (!ValidateUserGroup(app.Context.User.Identity.Name))
+            if (!ValidateUserGroup(request.Form.Get("username")))
             {
-                DbgWrite("denied usergroup " + app.Context.User.Identity.Name);
+                DbgWrite("denied usergroup " + request.Form.Get("username"));
                 response.StatusCode = 401;
             }
         }
@@ -176,7 +173,7 @@ namespace FormAuthenticationHelper
                         // is user a part of the groups allowed for the path?
                         // if user has no group listed, assume they have global permission
                         // conversely, if no group is listed for the path, assume anyone logged in is permitted to access
-                        if (passwordLookup == password)
+                        if (BCrypt.Net.BCrypt.Verify(password, passwordLookup))
                         {
                             return true;
                         }

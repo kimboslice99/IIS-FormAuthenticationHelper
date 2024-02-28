@@ -46,6 +46,13 @@
     <Reference Include="System.Net.Http" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Bcrypt.Net\BCrypt.cs" />
+    <Compile Include="Bcrypt.Net\BcryptAuthenticationException.cs" />
+    <Compile Include="Bcrypt.Net\HashInformation.cs" />
+    <Compile Include="Bcrypt.Net\HashInformationException.cs" />
+    <Compile Include="Bcrypt.Net\HashParser.cs" />
+    <Compile Include="Bcrypt.Net\HashType.cs" />
+    <Compile Include="Bcrypt.Net\SaltParseException.cs" />
     <Compile Include="FormAuthenticationHelper.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
