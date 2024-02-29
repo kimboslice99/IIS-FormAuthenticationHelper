@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Security.Principal;
 using System.Web;
 using System.Web.Security;
@@ -10,18 +11,17 @@ namespace FormsAuthenticationHelper
     {
         public void Dispose() {  }
 
-
         public void Init(HttpApplication context)
         {
             if (!IsModuleLoaded(typeof(System.Web.Security.FormsAuthenticationModule)))
             {
-                DbgWrite("Form Auth Module missing");
-                throw new MissingMethodException();
+                WriteLog("FormsAuthenticationModule missing", EventLogEntryType.Error);
+                WriteDbg("FormsAuthenticationModule missing");
+                throw new InvalidOperationException("FormsAuthenticationModule is not loaded.");
             }
             context.AuthenticateRequest += new EventHandler(Login);
             context.AuthorizeRequest += new EventHandler(Authorize);
         }
-
 
         public void Authorize(Object source, EventArgs e)
         {
@@ -35,7 +35,7 @@ namespace FormsAuthenticationHelper
                 // Retrieve the current user's principal
                 IPrincipal user = context.User;
 
-                // If user is null then make it anonymous... I am surprised this isnt done on its own
+                // if user null then anonymouse
                 if (user == null)
                 {
                     user = new GenericPrincipal(new GenericIdentity(""), null);
@@ -44,12 +44,12 @@ namespace FormsAuthenticationHelper
                 // Check URL access for the current user's principal
                 if (!UrlAuthorizationModule.CheckUrlAccessForPrincipal(request.Url.AbsolutePath, user, request.HttpMethod))
                 {
-                    DbgWrite($"Access denied for user:[{user.Identity.Name}] at path:[{request.Path}]");
+                    WriteDbg($"Access denied for user:[{user.Identity.Name}] at path:[{request.Path}]");
                     FormsAuthentication.RedirectToLoginPage();
                 }
                 else
                 {
-                    DbgWrite($"Allowed user:[{user.Identity.Name}] at path:[{request.Path}]");
+                    WriteDbg($"Allowed user:[{user.Identity.Name}] at path:[{request.Path}]");
                 }
             }
         }
@@ -59,21 +59,18 @@ namespace FormsAuthenticationHelper
             HttpApplication app = (HttpApplication)source;
             HttpRequest request = app.Context.Request;
             
-            // we should only respond to post requests at our loginurl
-            if (request.HttpMethod != "POST" && request.Url.AbsolutePath.ToLower() != FormsAuthentication.LoginUrl.ToLower())
+            if (request.HttpMethod == "POST" && request.Url.AbsolutePath.ToLower() == FormsAuthentication.LoginUrl.ToLower())
             {
-                DbgWrite("Login(): Not at path and request method is not post, return");
-                return;
-            }
-            DbgWrite("Validating user");
-            if(Membership.ValidateUser(request.Form.Get("username"), request.Form.Get("password")))
-            {
-                FormsAuthentication.RedirectFromLoginPage(request.Form.Get("username"), false);
-                DbgWrite($"validated user:[{request.Form.Get("username")}]");
-            }
-            else
-            {
-                DbgWrite($"Membership.ValidateUser() failure user:[{request.Form.Get("username")}]");
+                WriteDbg($"Login() Validating user:[{request.Form.Get("username")}]");
+                if (Membership.ValidateUser(request.Form.Get("username"), request.Form.Get("password")))
+                {
+                    FormsAuthentication.RedirectFromLoginPage(request.Form.Get("username"), false);
+                    WriteLog($"validated user:[{request.Form.Get("username")}]", EventLogEntryType.Information);
+                }
+                else
+                {
+                    WriteLog($"Membership.ValidateUser() failure user:[{request.Form.Get("username")}] path:[{request.Url.AbsolutePath}] ip:[{request.ServerVariables["REMOTE_ADDR"]}]", EventLogEntryType.Warning);
+                }
             }
         }
 
@@ -95,10 +92,13 @@ namespace FormsAuthenticationHelper
             return false;
         }
 
-        public void DbgWrite(string msg)
+        private void WriteLog(string msg, EventLogEntryType type)
         {
-            System.Diagnostics.Debug.WriteLine($"[FormAuthenticationHelper]: {msg}");
+            EventLog.WriteEntry(".NET Runtime", $"[FormsAuthenticationHelper]: {msg}", type, 1000);
         }
-
+        private void WriteDbg(string msg)
+        {
+            System.Diagnostics.Debug.WriteLine($"[FormsAuthenticationHelper]: {msg}");
+        }
     }
 }
