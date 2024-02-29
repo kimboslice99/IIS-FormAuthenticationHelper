@@ -4,9 +4,9 @@ using System.Web;
 using System.Web.Security;
 
 
-namespace FormAuthenticationHelper
+namespace FormsAuthenticationHelper
 {
-    public class FormAuthenticationHelper : IHttpModule
+    public class FormsAuthenticationHelper : IHttpModule
     {
         public void Dispose() {  }
 
@@ -28,16 +28,15 @@ namespace FormAuthenticationHelper
             HttpApplication app = (HttpApplication)source;
             HttpContext context = app.Context;
             HttpRequest request = context.Request;
-            HttpResponse response = context.Response;
 
             // Only check authoriation on urls which arent our loginurl
-            if (!request.Url.AbsolutePath.ToLower().EndsWith(FormsAuthentication.LoginUrl.ToLower()))
+            if (request.Url.AbsolutePath.ToLower() != FormsAuthentication.LoginUrl.ToLower())
             {
                 // Retrieve the current user's principal
                 IPrincipal user = context.User;
 
                 // If user is null then make it anonymous... I am surprised this isnt done on its own
-                if (user == null || !user.Identity.IsAuthenticated)
+                if (user == null)
                 {
                     user = new GenericPrincipal(new GenericIdentity(""), null);
                 }
@@ -58,7 +57,6 @@ namespace FormAuthenticationHelper
         public void Login(Object source, EventArgs e)
         {
             HttpApplication app = (HttpApplication)source;
-            HttpContext context = app.Context;
             HttpRequest request = app.Context.Request;
             
             // we should only respond to post requests at our loginurl
