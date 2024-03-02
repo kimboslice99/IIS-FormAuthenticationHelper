@@ -51,7 +51,7 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>copy /B /V /Y C:\build\IIS-FormAuthenticationHelper\bin\Debug\FormsAuthenticationHelper.dll C:\inetpub\test\bin
-copy /B /V /Y C:\build\IIS-FormAuthenticationHelper\bin\Debug\FormsAuthenticationHelper.pdb C:\inetpub\test\bin</PostBuildEvent>
+    <PostBuildEvent>
+    </PostBuildEvent>
   </PropertyGroup>
 </Project>
