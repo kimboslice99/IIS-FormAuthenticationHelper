@@ -5,11 +5,11 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("FormAuthenticationHelper")]
+[assembly: AssemblyTitle("FormsAuthenticationHelper")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("FormAuthenticationHelper")]
+[assembly: AssemblyProduct("FormsAuthenticationHelper")]
 [assembly: AssemblyCopyright("Copyright © kimboslice99 2024")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
