@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Linq;
-using System.Security.Principal;
 using System.Web;
 using System.Web.Security;
 
@@ -23,43 +22,7 @@ namespace FormsAuthenticationHelper
                 throw new InvalidOperationException("FormsAuthenticationModule is not loaded.");
             }
             context.AuthenticateRequest += new EventHandler(Login);
-            context.AuthorizeRequest += new EventHandler(Authorize);
             context.EndRequest += new EventHandler(Logout);
-        }
-
-        public void Authorize(Object source, EventArgs e)
-        {
-            HttpApplication app = (HttpApplication)source;
-            HttpContext context = app.Context;
-            HttpRequest request = context.Request;
-
-            // Only check authoriation on urls which arent our loginurl
-            if (request.Url.AbsolutePath.ToLower() != FormsAuthentication.LoginUrl.ToLower())
-            {
-                // Retrieve the current user's principal
-                IPrincipal user = context.User;
-
-                // if user null then anonymouse
-                if (user == null)
-                {
-                    user = new GenericPrincipal(new GenericIdentity(""), null);
-                }
-
-                // Check URL access for the current user's principal
-                if (!UrlAuthorizationModule.CheckUrlAccessForPrincipal(request.Url.AbsolutePath, user, request.HttpMethod))
-                {
-#if DEBUG
-                    WriteDbg($"Access denied for user:[{user.Identity.Name}] at path:[{request.Path}]");
-#endif
-                    FormsAuthentication.RedirectToLoginPage();
-                }
-#if DEBUG
-                else
-                {
-                    WriteDbg($"Allowed user:[{user.Identity.Name}] at path:[{request.Path}]");
-                }
-#endif
-            }
         }
 
         public void Login(Object source, EventArgs e)
