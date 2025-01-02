@@ -30,19 +30,39 @@ namespace FormsAuthenticationHelper
             HttpApplication app = (HttpApplication)source;
             HttpRequest request = app.Context.Request;
             
-            if (request.HttpMethod == "POST" && request.Url.AbsolutePath.ToLower() == FormsAuthentication.LoginUrl.ToLower())
+            if (request.HttpMethod == "POST" && AtLoginUrl(request))
             {
+                // perform some validation
+                string formUsername = request.Form.Get("username");
+                string formPassword = request.Form.Get("password");
 #if DEBUG
-                WriteDbg($"Login() Validating user:[{request.Form.Get("username")}]");
+                WriteDbg($"Login() Validating user:[{formUsername}]");
 #endif
-                if (Membership.ValidateUser(request.Form.Get("username"), request.Form.Get("password")))
+                // check if null or whitespace
+                if (string.IsNullOrWhiteSpace(formUsername) || string.IsNullOrWhiteSpace(formPassword))
                 {
-                    FormsAuthentication.RedirectFromLoginPage(request.Form.Get("username"), false);
-                    WriteLog($"Membership.ValidateUser() success user:[{request.Form.Get("username")}] ip:[{request.ServerVariables["REMOTE_ADDR"]}] path:[{request.Url.AbsolutePath}]", EventLogEntryType.Information);
+#if DEBUG
+                    WriteDbg($"Login() Validating user:[{formUsername}] failed. IsNullOrWhiteSpace()");
+#endif
+                    return;
+                }
+                // check more than 1000 chars
+                if (formUsername.Length > 999 || formPassword.Length > 999)
+                {
+#if DEBUG
+                    WriteDbg($"Login() Validating user:[{formUsername}] failed. string length limit exceeded.");
+#endif
+                    return;
+                }
+
+                if (Membership.ValidateUser(formUsername, formPassword))
+                {
+                    FormsAuthentication.RedirectFromLoginPage(formUsername, false);
+                    WriteLog($"Membership.ValidateUser() success user:[{formUsername}] ip:[{request.ServerVariables["REMOTE_ADDR"]}] path:[{request.Url.AbsolutePath}]", EventLogEntryType.Information);
                 }
                 else
                 {
-                    WriteLog($"Membership.ValidateUser() failure user:[{request.Form.Get("username")}] ip:[{request.ServerVariables["REMOTE_ADDR"]}] path:[{request.Url.AbsolutePath}]", EventLogEntryType.Warning);
+                    WriteLog($"Membership.ValidateUser() failure user:[{formUsername}] ip:[{request.ServerVariables["REMOTE_ADDR"]}] path:[{request.Url.AbsolutePath}]", EventLogEntryType.Warning);
                 }
             }
         }
@@ -58,8 +78,13 @@ namespace FormsAuthenticationHelper
             {
                 response.Headers.Remove("X-Logout-User");
                 FormsAuthentication.SignOut();
-                response.Redirect(FormsAuthentication.LoginUrl);
+                FormsAuthentication.RedirectToLoginPage();
             }
+        }
+
+        internal bool AtLoginUrl(HttpRequest request)
+        {
+            return request.Url.AbsolutePath.ToLower() == FormsAuthentication.LoginUrl.ToLower();
         }
 
         /// <summary>
