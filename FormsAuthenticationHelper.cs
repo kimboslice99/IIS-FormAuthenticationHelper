@@ -4,7 +4,6 @@ using System.Linq;
 using System.Web;
 using System.Web.Security;
 
-
 namespace FormsAuthenticationHelper
 {
     public class FormsAuthenticationHelper : IHttpModule
@@ -13,15 +12,18 @@ namespace FormsAuthenticationHelper
 
         public void Init(HttpApplication context)
         {
+            // check for the formauthenticationmodule to be loaded
             if (!IsModuleLoaded(typeof(System.Web.Security.FormsAuthenticationModule)))
             {
                 WriteLog("FormsAuthenticationModule missing", EventLogEntryType.Error);
-#if DEBUG
                 WriteDbg("FormsAuthenticationModule missing");
-#endif
                 throw new InvalidOperationException("FormsAuthenticationModule is not loaded.");
             }
+            // authenticate the user
             context.AuthenticateRequest += new EventHandler(Login);
+            // update user last active
+            context.AuthorizeRequest += new EventHandler(UpdateLastActive);
+            // logout the user
             context.EndRequest += new EventHandler(Logout);
         }
 
@@ -35,23 +37,16 @@ namespace FormsAuthenticationHelper
                 // perform some validation
                 string formUsername = request.Form.Get("username");
                 string formPassword = request.Form.Get("password");
-#if DEBUG
-                WriteDbg($"Login() Validating user:[{formUsername}]");
-#endif
                 // check if null or whitespace
                 if (string.IsNullOrWhiteSpace(formUsername) || string.IsNullOrWhiteSpace(formPassword))
                 {
-#if DEBUG
                     WriteDbg($"Login() Validating user:[{formUsername}] failed. IsNullOrWhiteSpace()");
-#endif
                     return;
                 }
                 // check more than 1000 chars
                 if (formUsername.Length > 999 || formPassword.Length > 999)
                 {
-#if DEBUG
                     WriteDbg($"Login() Validating user:[{formUsername}] failed. string length limit exceeded.");
-#endif
                     return;
                 }
 
@@ -78,13 +73,29 @@ namespace FormsAuthenticationHelper
             {
                 response.Headers.Remove("X-Logout-User");
                 FormsAuthentication.SignOut();
-                FormsAuthentication.RedirectToLoginPage();
+                //FormsAuthentication.RedirectToLoginPage(); // causes returnurl of logout page to
+                response.Redirect(FormsAuthentication.LoginUrl);
+            }
+        }
+
+        public void UpdateLastActive(Object source, EventArgs e)
+        {
+            HttpApplication app = (HttpApplication)source;
+            HttpContext context = app.Context;
+            if(IsAuthenticated(context))
+            {
+                Membership.GetUser(context.User.Identity.Name, true);
             }
         }
 
         internal bool AtLoginUrl(HttpRequest request)
         {
             return request.Url.AbsolutePath.ToLower() == FormsAuthentication.LoginUrl.ToLower();
+        }
+
+        internal bool IsAuthenticated(HttpContext context)
+        {
+            return context.User != null && context.User.Identity != null && context.User.Identity.IsAuthenticated;
         }
 
         /// <summary>
@@ -109,11 +120,12 @@ namespace FormsAuthenticationHelper
         {
             EventLog.WriteEntry(".NET Runtime", $"[FormsAuthenticationHelper]: {msg}", type, 1000);
         }
-#if DEBUG
+
         private void WriteDbg(string msg)
         {
+#if DEBUG
             System.Diagnostics.Debug.WriteLine($"[FormsAuthenticationHelper]: {msg}");
-        }
 #endif
+        }
     }
 }
